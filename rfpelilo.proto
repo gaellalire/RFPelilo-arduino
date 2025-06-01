@@ -1,3 +1,31 @@
-message {
+syntax = "proto3";
 
+import "embedded_proto_options.proto";
+
+package rfpelilo;
+option java_package = "fr.gaellalire.arduino.protobuf";
+
+message SendRFRequest {
+    uint32 modulation = 1;
+    float frequency = 2;
+    float deviation = 3;
+    float dataRate = 4;
+    bytes data = 5 [(EmbeddedProto.options).maxLength = 61];;
+}
+
+enum CommandStatus {
+    OK = 0;
+
+    /**< Common Errors */
+    ERROR = 1; /**< Unknown error */
+}
+
+
+message Main {
+    uint32 command_id = 1;
+    CommandStatus command_status = 2;
+    bool has_next = 3;
+    oneof content {
+        SendRFRequest send_rf_request = 4;
+    }
 }
