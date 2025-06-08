@@ -8,9 +8,10 @@ option java_package = "fr.gaellalire.arduino.protobuf";
 message SendRFRequest {
     uint32 modulation = 1;
     float frequency = 2;
-    float deviation = 3;
+    optional float deviation = 3;
     float dataRate = 4;
-    bytes data = 5 [(EmbeddedProto.options).maxLength = 61];;
+    bytes data = 5 [(EmbeddedProto.options).maxLength = 61];
+    optional uint32 repeat = 6;
 }
 
 enum CommandStatus {

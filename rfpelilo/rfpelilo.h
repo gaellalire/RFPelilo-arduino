@@ -48,6 +48,15 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
 
       set_dataRate(rhs.get_dataRate());
       set_data(rhs.get_data());
+      if(rhs.has_repeat())
+      {
+        set_repeat(rhs.get_repeat());
+      }
+      else
+      {
+        clear_repeat();
+      }
+
     }
 
     SendRFRequest(const SendRFRequest&& rhs ) noexcept
@@ -65,6 +74,15 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
 
       set_dataRate(rhs.get_dataRate());
       set_data(rhs.get_data());
+      if(rhs.has_repeat())
+      {
+        set_repeat(rhs.get_repeat());
+      }
+      else
+      {
+        clear_repeat();
+      }
+
     }
 
     ~SendRFRequest() override = default;
@@ -76,7 +94,8 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       FREQUENCY = 2,
       DEVIATION = 3,
       DATARATE = 4,
-      DATA = 5
+      DATA = 5,
+      REPEAT = 6
     };
 
     SendRFRequest& operator=(const SendRFRequest& rhs)
@@ -94,6 +113,15 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
 
       set_dataRate(rhs.get_dataRate());
       set_data(rhs.get_data());
+      if(rhs.has_repeat())
+      {
+        set_repeat(rhs.get_repeat());
+      }
+      else
+      {
+        clear_repeat();
+      }
+
       return *this;
     }
 
@@ -112,6 +140,15 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       
       set_dataRate(rhs.get_dataRate());
       set_data(rhs.get_data());
+      if(rhs.has_repeat())
+      {
+        set_repeat(rhs.get_repeat());
+      }
+      else
+      {
+        clear_repeat();
+      }
+      
       return *this;
     }
 
@@ -174,6 +211,34 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
     inline const ::EmbeddedProto::FieldBytes<61>& get_data() const { return data_; }
     inline const uint8_t* data() const { return data_.get_const(); }
 
+    static constexpr char const* REPEAT_NAME = "repeat";
+    inline bool has_repeat() const
+    {
+      return 0 != (presence::mask(presence::fields::REPEAT) & presence_[presence::index(presence::fields::REPEAT)]);
+    }
+    inline void clear_repeat()
+    {
+      presence_[presence::index(presence::fields::REPEAT)] &= ~(presence::mask(presence::fields::REPEAT));
+      repeat_.clear();
+    }
+    inline void set_repeat(const uint32_t& value)
+    {
+      presence_[presence::index(presence::fields::REPEAT)] |= presence::mask(presence::fields::REPEAT);
+      repeat_ = value;
+    }
+    inline void set_repeat(const uint32_t&& value)
+    {
+      presence_[presence::index(presence::fields::REPEAT)] |= presence::mask(presence::fields::REPEAT);
+      repeat_ = value;
+    }
+    inline uint32_t& mutable_repeat()
+    {
+      presence_[presence::index(presence::fields::REPEAT)] |= presence::mask(presence::fields::REPEAT);
+      return repeat_.get();
+    }
+    inline const uint32_t& get_repeat() const { return repeat_.get(); }
+    inline uint32_t repeat() const { return repeat_.get(); }
+
 
     ::EmbeddedProto::Error serialize(::EmbeddedProto::WriteBufferInterface& buffer) const override
     {
@@ -202,6 +267,11 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       if(::EmbeddedProto::Error::NO_ERRORS == return_value)
       {
         return_value = data_.serialize_with_id(static_cast<uint32_t>(FieldNumber::DATA), buffer, false);
+      }
+
+      if(has_repeat() && (::EmbeddedProto::Error::NO_ERRORS == return_value))
+      {
+        return_value = repeat_.serialize_with_id(static_cast<uint32_t>(FieldNumber::REPEAT), buffer, true);
       }
 
       return return_value;
@@ -241,6 +311,11 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
             return_value = data_.deserialize_check_type(buffer, wire_type);
             break;
 
+          case FieldNumber::REPEAT:
+            presence_[presence::index(presence::fields::REPEAT)] |= presence::mask(presence::fields::REPEAT);
+            return_value = repeat_.deserialize_check_type(buffer, wire_type);
+            break;
+
           case FieldNumber::NOT_SET:
             return_value = ::EmbeddedProto::Error::INVALID_FIELD_ID;
             break;
@@ -275,6 +350,7 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       clear_deviation();
       clear_dataRate();
       clear_data();
+      clear_repeat();
 
     }
 
@@ -297,6 +373,9 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
           break;
         case FieldNumber::DATA:
           name = DATA_NAME;
+          break;
+        case FieldNumber::REPEAT:
+          name = REPEAT_NAME;
           break;
         default:
           name = "Invalid FieldNumber";
@@ -363,6 +442,7 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       left_chars = deviation_.to_string(left_chars, indent_level + 2, DEVIATION_NAME, false);
       left_chars = dataRate_.to_string(left_chars, indent_level + 2, DATARATE_NAME, false);
       left_chars = data_.to_string(left_chars, indent_level + 2, DATA_NAME, false);
+      left_chars = repeat_.to_string(left_chars, indent_level + 2, REPEAT_NAME, false);
   
       if( 0 == indent_level) 
       {
@@ -393,11 +473,12 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
         // An enumeration with all the fields for which presence has to be tracked.
         enum class fields : uint32_t
         {
-          DEVIATION
+          DEVIATION,
+          REPEAT
         };
 
         // The number of fields for which presence has to be tracked.
-        static constexpr uint32_t N_FIELDS = 1;
+        static constexpr uint32_t N_FIELDS = 2;
 
         // Which type are we using to track presence.
         using TYPE = uint32_t;
@@ -426,6 +507,7 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       EmbeddedProto::floatfixed deviation_ = 0.0;
       EmbeddedProto::floatfixed dataRate_ = 0.0;
       ::EmbeddedProto::FieldBytes<61> data_;
+      EmbeddedProto::uint32 repeat_ = 0U;
 
 };
 

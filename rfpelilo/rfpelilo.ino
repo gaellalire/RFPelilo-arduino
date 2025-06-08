@@ -1,12 +1,20 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
+#include <ArduinoBLE.h>
 #include <ReadBufferFixedSize.h>
+#include <WriteBufferFixedSize.h>
 #include "rfpelilo.h"
 
-::rfpelilo::Main main_;
+::rfpelilo::Main request_;
+::rfpelilo::Main response_;
 
 EmbeddedProto::ReadBufferFixedSize<256> read_buffer_;
+EmbeddedProto::WriteBufferFixedSize<256> write_buffer_;
 
-byte transmitt_byte[11] = { 72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100 };
+int lc = 0;
+
+// byte transmitt_byte[11] = { 72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100 };
+ byte transmitt_byte[] = {-86, -99, 84, -22, -89, 85, 58, -87, -43, 78, -86, 117, 83, -86, -99, 84, -22, -89, 85, 58, -87, -43, 79, -1, -12, 127, -107, -99, 84, -22, -89, 85, 58, -87, -43, 78, -90, 116, -45, -102, -99, 76, -27, -89, 85, 58, -91, -54, -50, -15, -32};
+
 // {72,101,108,108,111,32,87,111,114,108,100};
 
 // 48, 65. 6c, 6c, 6f, 20,57, 6f, 72, 6c, 64
@@ -22,10 +30,11 @@ void setup() {
   }
 
   if (ELECHOUSE_cc1101.getCC1101()) {  // Check the CC1101 Spi connection.
-    Serial.println("Connection OK");
+                                       //    Serial.println("Connection OK");
   } else {
-    Serial.println("Connection Error");
+    //    Serial.println("Connection Error");
   }
+
 
   ELECHOUSE_cc1101.Init();               // must be set to initialize the cc1101!
   ELECHOUSE_cc1101.setCCMode(1);         // set config for internal transmission mode.
@@ -54,58 +63,91 @@ void setup() {
                                          // ELECHOUSE_cc1101.setPQT(0);             // Preamble quality estimator threshold. The preamble quality estimator increases an internal counter by one each time a bit is received that is different from the previous bit, and decreases the counter by 8 each time a bit is received that is the same as the last bit. A threshold of 4∙PQT for this counter is used to gate sync word detection. When PQT=0 a sync word is always accepted.
   ELECHOUSE_cc1101.setAppendStatus(0);   // When enabled, two status bytes will be appended to the payload of the packet. The status bytes contain RSSI and LQI values, as well as CRC OK.
 
-  Serial.println("Tx Mode");
+
+  //  Serial.println("Tx Mode");
 }
 
 void loop() {
   read_buffer_.clear();
   while (!Serial.available()) {
   }
-  while (!Serial.available()) {
+  while (Serial.available()) {
     read_buffer_.push(Serial.read());
   }
-  const auto result = main_.deserialize(read_buffer_);
+  String s = "In loop ";
+  //   Serial.println(s + (lc++) + " read size " + read_buffer_.get_size());
+
+  write_buffer_.clear();
+  const auto result = request_.deserialize(read_buffer_);
   if (EmbeddedProto::Error::NO_ERRORS == result) {
-    rfpelilo::SendRFRequest sendRFRequest = main_.get_send_rf_request();
+    //       Serial.println("sending OK response");
+    rfpelilo::SendRFRequest sendRFRequest = request_.get_send_rf_request();
+
+
+
+
 
     ELECHOUSE_cc1101.setModulation(sendRFRequest.get_modulation());  // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
     ELECHOUSE_cc1101.setMHZ(sendRFRequest.get_frequency());          // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
     if (sendRFRequest.has_deviation()) {
       ELECHOUSE_cc1101.setDeviation(sendRFRequest.get_deviation());  // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
     }
+
+
+
+
     ELECHOUSE_cc1101.setDRate(sendRFRequest.get_dataRate());  // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
-    send(sendRFRequest.get_data().get_const(), sendRFRequest.get_data().get_length());
+
+
+
+    int repeat = 1;
+    if (sendRFRequest.has_repeat()) {
+      repeat = sendRFRequest.get_repeat();
+    }
+
+repeat = 5;
+    for (int i = 0; i < repeat; i++) {
+      send(transmitt_byte  , sendRFRequest.get_data().get_length());
+      // sendRFRequest.get_data().get_const()
+    } 
+
+
+    response_.set_command_id(request_.get_command_id());
+    response_.set_command_status(rfpelilo::CommandStatus::OK);
+    const auto wresult = response_.serialize(write_buffer_);
+    if (EmbeddedProto::Error::NO_ERRORS == wresult) {
+      Serial.write(write_buffer_.get_data(), write_buffer_.get_size());
+      String o = "OK response sent ";
+
+      // Serial.println(o + write_buffer_.get_size() + " size");
+
+    } else {
+      // Serial.println("Cannot send OK response");
+    }
+  } else {
+    //     Serial.println("sending ERROR response");
+
+    response_.set_command_id(-1);
+    response_.set_command_status(rfpelilo::CommandStatus::ERROR);
+    const auto wresult = response_.serialize(write_buffer_);
+    if (EmbeddedProto::Error::NO_ERRORS == wresult) {
+      Serial.write(write_buffer_.get_data(), write_buffer_.get_size());
+    } else {
+      //  Serial.println("Cannot send ERROR response");
+    }
   }
+  delay(1000);
+}
 
-  Serial.println("print4");
-
-  //3 different methods to send data without gdo
-  //When sending, we give a little time to completely transmit the message (time in millis).
-  //You can shorten the time. It depends on the data rate and the packet length. Just try it out for fine tuning.
-
-  //Transmitt "Hello World" from byte format.
-  // ELECHOUSE_cc1101.SendData(transmitt_byte, 11, 100);
-
-
-  // trxstate=1;
-
-  send(transmitt_byte, 11);
-
-  delay(2000);
-
-  /*
-    Serial.println("print2");
-
-//Transmitt "Hello World" from char format.
-ELECHOUSE_cc1101.SendData(transmitt_char, 100);
-delay(2000);
-    Serial.println("print3");
-
-
-//Transmitt "Hello World" from char format directly.
-ELECHOUSE_cc1101.SendData("Hello World", 100);
-delay(2000);
-*/
+void hardReset(){	
+	digitalWrite(SS_PIN, LOW);
+	delay(1);
+	digitalWrite(SS_PIN, HIGH);
+	delay(1);
+	spiStartTransaction();
+	SPI.transfer(CC1101_SRES);
+	spiEndTransaction();
+	spiStrobe(CC1101_SCAL);
 }
 
 void send(const byte *data, byte size) {
