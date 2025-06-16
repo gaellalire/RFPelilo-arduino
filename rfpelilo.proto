@@ -5,12 +5,19 @@ import "embedded_proto_options.proto";
 package rfpelilo;
 option java_package = "fr.gaellalire.arduino.protobuf";
 
+message Empty {
+}
+
+message ErrorMessage {
+  string text = 1 [(EmbeddedProto.options).maxLength = 200];
+}
+
 message SendRFRequest {
     uint32 modulation = 1;
     float frequency = 2;
     optional float deviation = 3;
     float dataRate = 4;
-    bytes data = 5 [(EmbeddedProto.options).maxLength = 61];
+    bytes data = 5 [(EmbeddedProto.options).maxLength = 255];
     optional uint32 repeat = 6;
 }
 
@@ -19,6 +26,11 @@ enum CommandStatus {
 
     /**< Common Errors */
     ERROR = 1; /**< Unknown error */
+    RF_FREQUENCY_ERROR = 2;
+    RF_FREQUENCY_DEVIATION_ERROR = 3;
+    RF_DATA_RATE_ERROR = 4;
+    RF_PACKET_LENGTH_ERROR = 5;
+    RF_TRANSMIT_FAILED = 6;
 }
 
 
@@ -27,6 +39,8 @@ message Main {
     CommandStatus command_status = 2;
     bool has_next = 3;
     oneof content {
-        SendRFRequest send_rf_request = 4;
+        Empty empty = 4;
+        SendRFRequest send_rf_request = 5;
+        ErrorMessage error_message = 6;
     }
 }

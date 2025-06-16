@@ -26,7 +26,387 @@ namespace rfpelilo {
 enum class CommandStatus : uint32_t
 {
   OK = 0,
-  ERROR = 1
+  ERROR = 1,
+  RF_FREQUENCY_ERROR = 2,
+  RF_FREQUENCY_DEVIATION_ERROR = 3,
+  RF_DATA_RATE_ERROR = 4,
+  RF_PACKET_LENGTH_ERROR = 5,
+  RF_TRANSMIT_FAILED = 6
+};
+
+class Empty final: public ::EmbeddedProto::MessageInterface
+{
+  public:
+    Empty() = default;
+    Empty(const Empty& rhs )
+    {
+    }
+
+    Empty(const Empty&& rhs ) noexcept
+    {
+    }
+
+    ~Empty() override = default;
+
+    enum class FieldNumber : uint32_t
+    {
+      NOT_SET = 0,
+    };
+
+    Empty& operator=(const Empty& rhs)
+    {
+      return *this;
+    }
+
+    Empty& operator=(const Empty&& rhs) noexcept
+    {
+      return *this;
+    }
+
+
+    ::EmbeddedProto::Error serialize(::EmbeddedProto::WriteBufferInterface& buffer) const override
+    {
+      ::EmbeddedProto::Error return_value = ::EmbeddedProto::Error::NO_ERRORS;
+
+      return return_value;
+    };
+
+    ::EmbeddedProto::Error deserialize(::EmbeddedProto::ReadBufferInterface& buffer) override
+    {
+      ::EmbeddedProto::Error return_value = ::EmbeddedProto::Error::NO_ERRORS;
+      ::EmbeddedProto::WireFormatter::WireType wire_type = ::EmbeddedProto::WireFormatter::WireType::VARINT;
+      uint32_t id_number = 0;
+      FieldNumber id_tag = FieldNumber::NOT_SET;
+
+      ::EmbeddedProto::Error tag_value = ::EmbeddedProto::WireFormatter::DeserializeTag(buffer, wire_type, id_number);
+      while((::EmbeddedProto::Error::NO_ERRORS == return_value) && (::EmbeddedProto::Error::NO_ERRORS == tag_value))
+      {
+        id_tag = static_cast<FieldNumber>(id_number);
+        switch(id_tag)
+        {
+          case FieldNumber::NOT_SET:
+            return_value = ::EmbeddedProto::Error::INVALID_FIELD_ID;
+            break;
+
+          default:
+            return_value = skip_unknown_field(buffer, wire_type);
+            break;
+        }
+
+        if(::EmbeddedProto::Error::NO_ERRORS == return_value)
+        {
+          // Read the next tag.
+          tag_value = ::EmbeddedProto::WireFormatter::DeserializeTag(buffer, wire_type, id_number);
+        }
+      }
+
+      // When an error was detect while reading the tag but no other errors where found, set it in the return value.
+      if((::EmbeddedProto::Error::NO_ERRORS == return_value)
+         && (::EmbeddedProto::Error::NO_ERRORS != tag_value)
+         && (::EmbeddedProto::Error::END_OF_BUFFER != tag_value)) // The end of the buffer is not an array in this case.
+      {
+        return_value = tag_value;
+      }
+
+      return return_value;
+    };
+
+    void clear() override
+    {
+
+    }
+
+    static char const* field_number_to_name(const FieldNumber fieldNumber)
+    {
+      char const* name = nullptr;
+      switch(fieldNumber)
+      {
+        default:
+          name = "Invalid FieldNumber";
+          break;
+      }
+      return name;
+    }
+
+#ifdef MSG_TO_STRING
+
+    ::EmbeddedProto::string_view to_string(::EmbeddedProto::string_view& str) const
+    {
+      return this->to_string(str, 0, nullptr, true);
+    }
+
+    ::EmbeddedProto::string_view to_string(::EmbeddedProto::string_view& str, const uint32_t indent_level, char const* name, const bool first_field) const override
+    {
+      ::EmbeddedProto::string_view left_chars = str;
+      int32_t n_chars_used = 0;
+
+      if(!first_field)
+      {
+        // Add a comma behind the previous field.
+        n_chars_used = snprintf(left_chars.data, left_chars.size, ",\n");
+        if(0 < n_chars_used)
+        {
+          // Update the character pointer and characters left in the array.
+          left_chars.data += n_chars_used;
+          left_chars.size -= n_chars_used;
+        }
+      }
+
+      if(nullptr != name)
+      {
+        if( 0 == indent_level)
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "\"%s\": {\n", name);
+        }
+        else
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "%*s\"%s\": {\n", indent_level, " ", name);
+        }
+      }
+      else
+      {
+        if( 0 == indent_level)
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "{\n");
+        }
+        else
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "%*s{\n", indent_level, " ");
+        }
+      }
+      
+      if(0 < n_chars_used)
+      {
+        left_chars.data += n_chars_used;
+        left_chars.size -= n_chars_used;
+      }
+
+  
+      if( 0 == indent_level) 
+      {
+        n_chars_used = snprintf(left_chars.data, left_chars.size, "\n}");
+      }
+      else 
+      {
+        n_chars_used = snprintf(left_chars.data, left_chars.size, "\n%*s}", indent_level, " ");
+      }
+
+      if(0 < n_chars_used)
+      {
+        left_chars.data += n_chars_used;
+        left_chars.size -= n_chars_used;
+      }
+
+      return left_chars;
+    }
+
+#endif // End of MSG_TO_STRING
+
+  private:
+
+
+
+};
+
+class ErrorMessage final: public ::EmbeddedProto::MessageInterface
+{
+  public:
+    ErrorMessage() = default;
+    ErrorMessage(const ErrorMessage& rhs )
+    {
+      set_text(rhs.get_text());
+    }
+
+    ErrorMessage(const ErrorMessage&& rhs ) noexcept
+    {
+      set_text(rhs.get_text());
+    }
+
+    ~ErrorMessage() override = default;
+
+    enum class FieldNumber : uint32_t
+    {
+      NOT_SET = 0,
+      TEXT = 1
+    };
+
+    ErrorMessage& operator=(const ErrorMessage& rhs)
+    {
+      set_text(rhs.get_text());
+      return *this;
+    }
+
+    ErrorMessage& operator=(const ErrorMessage&& rhs) noexcept
+    {
+      set_text(rhs.get_text());
+      return *this;
+    }
+
+    static constexpr char const* TEXT_NAME = "text";
+    inline void clear_text() { text_.clear(); }
+    inline ::EmbeddedProto::FieldString<200>& mutable_text() { return text_; }
+    inline void set_text(const ::EmbeddedProto::FieldString<200>& rhs) { text_.set(rhs); }
+    inline const ::EmbeddedProto::FieldString<200>& get_text() const { return text_; }
+    inline const char* text() const { return text_.get_const(); }
+
+
+    ::EmbeddedProto::Error serialize(::EmbeddedProto::WriteBufferInterface& buffer) const override
+    {
+      ::EmbeddedProto::Error return_value = ::EmbeddedProto::Error::NO_ERRORS;
+
+      if(::EmbeddedProto::Error::NO_ERRORS == return_value)
+      {
+        return_value = text_.serialize_with_id(static_cast<uint32_t>(FieldNumber::TEXT), buffer, false);
+      }
+
+      return return_value;
+    };
+
+    ::EmbeddedProto::Error deserialize(::EmbeddedProto::ReadBufferInterface& buffer) override
+    {
+      ::EmbeddedProto::Error return_value = ::EmbeddedProto::Error::NO_ERRORS;
+      ::EmbeddedProto::WireFormatter::WireType wire_type = ::EmbeddedProto::WireFormatter::WireType::VARINT;
+      uint32_t id_number = 0;
+      FieldNumber id_tag = FieldNumber::NOT_SET;
+
+      ::EmbeddedProto::Error tag_value = ::EmbeddedProto::WireFormatter::DeserializeTag(buffer, wire_type, id_number);
+      while((::EmbeddedProto::Error::NO_ERRORS == return_value) && (::EmbeddedProto::Error::NO_ERRORS == tag_value))
+      {
+        id_tag = static_cast<FieldNumber>(id_number);
+        switch(id_tag)
+        {
+          case FieldNumber::TEXT:
+            return_value = text_.deserialize_check_type(buffer, wire_type);
+            break;
+
+          case FieldNumber::NOT_SET:
+            return_value = ::EmbeddedProto::Error::INVALID_FIELD_ID;
+            break;
+
+          default:
+            return_value = skip_unknown_field(buffer, wire_type);
+            break;
+        }
+
+        if(::EmbeddedProto::Error::NO_ERRORS == return_value)
+        {
+          // Read the next tag.
+          tag_value = ::EmbeddedProto::WireFormatter::DeserializeTag(buffer, wire_type, id_number);
+        }
+      }
+
+      // When an error was detect while reading the tag but no other errors where found, set it in the return value.
+      if((::EmbeddedProto::Error::NO_ERRORS == return_value)
+         && (::EmbeddedProto::Error::NO_ERRORS != tag_value)
+         && (::EmbeddedProto::Error::END_OF_BUFFER != tag_value)) // The end of the buffer is not an array in this case.
+      {
+        return_value = tag_value;
+      }
+
+      return return_value;
+    };
+
+    void clear() override
+    {
+      clear_text();
+
+    }
+
+    static char const* field_number_to_name(const FieldNumber fieldNumber)
+    {
+      char const* name = nullptr;
+      switch(fieldNumber)
+      {
+        case FieldNumber::TEXT:
+          name = TEXT_NAME;
+          break;
+        default:
+          name = "Invalid FieldNumber";
+          break;
+      }
+      return name;
+    }
+
+#ifdef MSG_TO_STRING
+
+    ::EmbeddedProto::string_view to_string(::EmbeddedProto::string_view& str) const
+    {
+      return this->to_string(str, 0, nullptr, true);
+    }
+
+    ::EmbeddedProto::string_view to_string(::EmbeddedProto::string_view& str, const uint32_t indent_level, char const* name, const bool first_field) const override
+    {
+      ::EmbeddedProto::string_view left_chars = str;
+      int32_t n_chars_used = 0;
+
+      if(!first_field)
+      {
+        // Add a comma behind the previous field.
+        n_chars_used = snprintf(left_chars.data, left_chars.size, ",\n");
+        if(0 < n_chars_used)
+        {
+          // Update the character pointer and characters left in the array.
+          left_chars.data += n_chars_used;
+          left_chars.size -= n_chars_used;
+        }
+      }
+
+      if(nullptr != name)
+      {
+        if( 0 == indent_level)
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "\"%s\": {\n", name);
+        }
+        else
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "%*s\"%s\": {\n", indent_level, " ", name);
+        }
+      }
+      else
+      {
+        if( 0 == indent_level)
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "{\n");
+        }
+        else
+        {
+          n_chars_used = snprintf(left_chars.data, left_chars.size, "%*s{\n", indent_level, " ");
+        }
+      }
+      
+      if(0 < n_chars_used)
+      {
+        left_chars.data += n_chars_used;
+        left_chars.size -= n_chars_used;
+      }
+
+      left_chars = text_.to_string(left_chars, indent_level + 2, TEXT_NAME, true);
+  
+      if( 0 == indent_level) 
+      {
+        n_chars_used = snprintf(left_chars.data, left_chars.size, "\n}");
+      }
+      else 
+      {
+        n_chars_used = snprintf(left_chars.data, left_chars.size, "\n%*s}", indent_level, " ");
+      }
+
+      if(0 < n_chars_used)
+      {
+        left_chars.data += n_chars_used;
+        left_chars.size -= n_chars_used;
+      }
+
+      return left_chars;
+    }
+
+#endif // End of MSG_TO_STRING
+
+  private:
+
+
+      ::EmbeddedProto::FieldString<200> text_;
+
 };
 
 class SendRFRequest final: public ::EmbeddedProto::MessageInterface
@@ -206,9 +586,9 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
 
     static constexpr char const* DATA_NAME = "data";
     inline void clear_data() { data_.clear(); }
-    inline ::EmbeddedProto::FieldBytes<61>& mutable_data() { return data_; }
-    inline void set_data(const ::EmbeddedProto::FieldBytes<61>& rhs) { data_.set(rhs); }
-    inline const ::EmbeddedProto::FieldBytes<61>& get_data() const { return data_; }
+    inline ::EmbeddedProto::FieldBytes<255>& mutable_data() { return data_; }
+    inline void set_data(const ::EmbeddedProto::FieldBytes<255>& rhs) { data_.set(rhs); }
+    inline const ::EmbeddedProto::FieldBytes<255>& get_data() const { return data_; }
     inline const uint8_t* data() const { return data_.get_const(); }
 
     static constexpr char const* REPEAT_NAME = "repeat";
@@ -506,7 +886,7 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       EmbeddedProto::floatfixed frequency_ = 0.0;
       EmbeddedProto::floatfixed deviation_ = 0.0;
       EmbeddedProto::floatfixed dataRate_ = 0.0;
-      ::EmbeddedProto::FieldBytes<61> data_;
+      ::EmbeddedProto::FieldBytes<255> data_;
       EmbeddedProto::uint32 repeat_ = 0U;
 
 };
@@ -528,8 +908,16 @@ class Main final: public ::EmbeddedProto::MessageInterface
 
       switch(rhs.get_which_content())
       {
+        case FieldNumber::EMPTY:
+          set_empty(rhs.get_empty());
+          break;
+
         case FieldNumber::SEND_RF_REQUEST:
           set_send_rf_request(rhs.get_send_rf_request());
+          break;
+
+        case FieldNumber::ERROR_MESSAGE:
+          set_error_message(rhs.get_error_message());
           break;
 
         default:
@@ -551,8 +939,16 @@ class Main final: public ::EmbeddedProto::MessageInterface
 
       switch(rhs.get_which_content())
       {
+        case FieldNumber::EMPTY:
+          set_empty(rhs.get_empty());
+          break;
+
         case FieldNumber::SEND_RF_REQUEST:
           set_send_rf_request(rhs.get_send_rf_request());
+          break;
+
+        case FieldNumber::ERROR_MESSAGE:
+          set_error_message(rhs.get_error_message());
           break;
 
         default:
@@ -569,7 +965,9 @@ class Main final: public ::EmbeddedProto::MessageInterface
       COMMAND_ID = 1,
       COMMAND_STATUS = 2,
       HAS_NEXT = 3,
-      SEND_RF_REQUEST = 4
+      EMPTY = 4,
+      SEND_RF_REQUEST = 5,
+      ERROR_MESSAGE = 6
     };
 
     Main& operator=(const Main& rhs)
@@ -585,8 +983,16 @@ class Main final: public ::EmbeddedProto::MessageInterface
 
       switch(rhs.get_which_content())
       {
+        case FieldNumber::EMPTY:
+          set_empty(rhs.get_empty());
+          break;
+
         case FieldNumber::SEND_RF_REQUEST:
           set_send_rf_request(rhs.get_send_rf_request());
+          break;
+
+        case FieldNumber::ERROR_MESSAGE:
+          set_error_message(rhs.get_error_message());
           break;
 
         default:
@@ -609,8 +1015,16 @@ class Main final: public ::EmbeddedProto::MessageInterface
 
       switch(rhs.get_which_content())
       {
+        case FieldNumber::EMPTY:
+          set_empty(rhs.get_empty());
+          break;
+
         case FieldNumber::SEND_RF_REQUEST:
           set_send_rf_request(rhs.get_send_rf_request());
+          break;
+
+        case FieldNumber::ERROR_MESSAGE:
+          set_error_message(rhs.get_error_message());
           break;
 
         default:
@@ -644,6 +1058,46 @@ class Main final: public ::EmbeddedProto::MessageInterface
     inline bool has_next() const { return has_next_.get(); }
 
     FieldNumber get_which_content() const { return which_content_; }
+
+    static constexpr char const* EMPTY_NAME = "empty";
+    inline bool has_empty() const
+    {
+      return FieldNumber::EMPTY == which_content_;
+    }
+    inline void clear_empty()
+    {
+      if(FieldNumber::EMPTY == which_content_)
+      {
+        which_content_ = FieldNumber::NOT_SET;
+        content_.empty_.~Empty();
+      }
+    }
+    inline void set_empty(const Empty& value)
+    {
+      if(FieldNumber::EMPTY != which_content_)
+      {
+        init_content(FieldNumber::EMPTY);
+      }
+      content_.empty_ = value;
+    }
+    inline void set_empty(const Empty&& value)
+    {
+      if(FieldNumber::EMPTY != which_content_)
+      {
+        init_content(FieldNumber::EMPTY);
+      }
+      content_.empty_ = value;
+    }
+    inline Empty& mutable_empty()
+    {
+      if(FieldNumber::EMPTY != which_content_)
+      {
+        init_content(FieldNumber::EMPTY);
+      }
+      return content_.empty_;
+    }
+    inline const Empty& get_empty() const { return content_.empty_; }
+    inline const Empty& empty() const { return content_.empty_; }
 
     static constexpr char const* SEND_RF_REQUEST_NAME = "send_rf_request";
     inline bool has_send_rf_request() const
@@ -685,6 +1139,46 @@ class Main final: public ::EmbeddedProto::MessageInterface
     inline const SendRFRequest& get_send_rf_request() const { return content_.send_rf_request_; }
     inline const SendRFRequest& send_rf_request() const { return content_.send_rf_request_; }
 
+    static constexpr char const* ERROR_MESSAGE_NAME = "error_message";
+    inline bool has_error_message() const
+    {
+      return FieldNumber::ERROR_MESSAGE == which_content_;
+    }
+    inline void clear_error_message()
+    {
+      if(FieldNumber::ERROR_MESSAGE == which_content_)
+      {
+        which_content_ = FieldNumber::NOT_SET;
+        content_.error_message_.~ErrorMessage();
+      }
+    }
+    inline void set_error_message(const ErrorMessage& value)
+    {
+      if(FieldNumber::ERROR_MESSAGE != which_content_)
+      {
+        init_content(FieldNumber::ERROR_MESSAGE);
+      }
+      content_.error_message_ = value;
+    }
+    inline void set_error_message(const ErrorMessage&& value)
+    {
+      if(FieldNumber::ERROR_MESSAGE != which_content_)
+      {
+        init_content(FieldNumber::ERROR_MESSAGE);
+      }
+      content_.error_message_ = value;
+    }
+    inline ErrorMessage& mutable_error_message()
+    {
+      if(FieldNumber::ERROR_MESSAGE != which_content_)
+      {
+        init_content(FieldNumber::ERROR_MESSAGE);
+      }
+      return content_.error_message_;
+    }
+    inline const ErrorMessage& get_error_message() const { return content_.error_message_; }
+    inline const ErrorMessage& error_message() const { return content_.error_message_; }
+
 
     ::EmbeddedProto::Error serialize(::EmbeddedProto::WriteBufferInterface& buffer) const override
     {
@@ -707,10 +1201,24 @@ class Main final: public ::EmbeddedProto::MessageInterface
 
       switch(which_content_)
       {
+        case FieldNumber::EMPTY:
+          if(has_empty() && (::EmbeddedProto::Error::NO_ERRORS == return_value))
+          {
+            return_value = content_.empty_.serialize_with_id(static_cast<uint32_t>(FieldNumber::EMPTY), buffer, true);
+          }
+          break;
+
         case FieldNumber::SEND_RF_REQUEST:
           if(has_send_rf_request() && (::EmbeddedProto::Error::NO_ERRORS == return_value))
           {
             return_value = content_.send_rf_request_.serialize_with_id(static_cast<uint32_t>(FieldNumber::SEND_RF_REQUEST), buffer, true);
+          }
+          break;
+
+        case FieldNumber::ERROR_MESSAGE:
+          if(has_error_message() && (::EmbeddedProto::Error::NO_ERRORS == return_value))
+          {
+            return_value = content_.error_message_.serialize_with_id(static_cast<uint32_t>(FieldNumber::ERROR_MESSAGE), buffer, true);
           }
           break;
 
@@ -746,7 +1254,9 @@ class Main final: public ::EmbeddedProto::MessageInterface
             return_value = has_next_.deserialize_check_type(buffer, wire_type);
             break;
 
+          case FieldNumber::EMPTY:
           case FieldNumber::SEND_RF_REQUEST:
+          case FieldNumber::ERROR_MESSAGE:
             return_value = deserialize_content(id_tag, buffer, wire_type);
             break;
 
@@ -800,8 +1310,14 @@ class Main final: public ::EmbeddedProto::MessageInterface
         case FieldNumber::HAS_NEXT:
           name = HAS_NEXT_NAME;
           break;
+        case FieldNumber::EMPTY:
+          name = EMPTY_NAME;
+          break;
         case FieldNumber::SEND_RF_REQUEST:
           name = SEND_RF_REQUEST_NAME;
+          break;
+        case FieldNumber::ERROR_MESSAGE:
+          name = ERROR_MESSAGE_NAME;
           break;
         default:
           name = "Invalid FieldNumber";
@@ -900,7 +1416,9 @@ class Main final: public ::EmbeddedProto::MessageInterface
       {
         content() {}
         ~content() {}
+        Empty empty_;
         SendRFRequest send_rf_request_;
+        ErrorMessage error_message_;
       };
       content content_;
 
@@ -915,8 +1433,16 @@ class Main final: public ::EmbeddedProto::MessageInterface
         // C++11 unions only support nontrivial members when you explicitly call the placement new statement.
         switch(field_id)
         {
+          case FieldNumber::EMPTY:
+            new(&content_.empty_) Empty;
+            break;
+
           case FieldNumber::SEND_RF_REQUEST:
             new(&content_.send_rf_request_) SendRFRequest;
+            break;
+
+          case FieldNumber::ERROR_MESSAGE:
+            new(&content_.error_message_) ErrorMessage;
             break;
 
           default:
@@ -930,8 +1456,14 @@ class Main final: public ::EmbeddedProto::MessageInterface
       {
         switch(which_content_)
         {
+          case FieldNumber::EMPTY:
+            ::EmbeddedProto::destroy_at(&content_.empty_);
+            break;
           case FieldNumber::SEND_RF_REQUEST:
             ::EmbeddedProto::destroy_at(&content_.send_rf_request_);
+            break;
+          case FieldNumber::ERROR_MESSAGE:
+            ::EmbeddedProto::destroy_at(&content_.error_message_);
             break;
           default:
             break;
@@ -952,8 +1484,14 @@ class Main final: public ::EmbeddedProto::MessageInterface
 
         switch(which_content_)
         {
+          case FieldNumber::EMPTY:
+            return_value = content_.empty_.deserialize_check_type(buffer, wire_type);
+            break;
           case FieldNumber::SEND_RF_REQUEST:
             return_value = content_.send_rf_request_.deserialize_check_type(buffer, wire_type);
+            break;
+          case FieldNumber::ERROR_MESSAGE:
+            return_value = content_.error_message_.deserialize_check_type(buffer, wire_type);
             break;
           default:
             break;
@@ -973,8 +1511,14 @@ class Main final: public ::EmbeddedProto::MessageInterface
 
         switch(which_content_)
         {
+          case FieldNumber::EMPTY:
+            left_chars = content_.empty_.to_string(left_chars, indent_level, EMPTY_NAME, first_field);
+            break;
           case FieldNumber::SEND_RF_REQUEST:
             left_chars = content_.send_rf_request_.to_string(left_chars, indent_level, SEND_RF_REQUEST_NAME, first_field);
+            break;
+          case FieldNumber::ERROR_MESSAGE:
+            left_chars = content_.error_message_.to_string(left_chars, indent_level, ERROR_MESSAGE_NAME, first_field);
             break;
           default:
             break;

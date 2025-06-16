@@ -1,166 +1,241 @@
-#include <ELECHOUSE_CC1101_SRC_DRV.h>
+// #define RADIOLIB_EXCLUDE_LR11X0 1
+#define TIMEOUT_MILLI 500
+
 #include <ArduinoBLE.h>
 #include <ReadBufferFixedSize.h>
 #include <WriteBufferFixedSize.h>
 #include "rfpelilo.h"
+#include <RadioLib.h>
+#include <FieldStringBytes.h>
+
+
+// CC1101 has the following connections:
+// CS pin:    10
+// GDO0 pin:  2
+// RST pin:   unused
+// GDO2 pin:  3
+CC1101 radio = new Module(10, 2, RADIOLIB_NC, 3);
 
 ::rfpelilo::Main request_;
 ::rfpelilo::Main response_;
 
-EmbeddedProto::ReadBufferFixedSize<256> read_buffer_;
-EmbeddedProto::WriteBufferFixedSize<256> write_buffer_;
+EmbeddedProto::ReadBufferFixedSize<550> read_buffer_;
+EmbeddedProto::WriteBufferFixedSize<550> write_buffer_;
 
-int lc = 0;
 
-// byte transmitt_byte[11] = { 72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100 };
- byte transmitt_byte[] = {-86, -99, 84, -22, -89, 85, 58, -87, -43, 78, -86, 117, 83, -86, -99, 84, -22, -89, 85, 58, -87, -43, 79, -1, -12, 127, -107, -99, 84, -22, -89, 85, 58, -87, -43, 78, -90, 116, -45, -102, -99, 76, -27, -89, 85, 58, -91, -54, -50, -15, -32};
+// create service
+BLEService duplexService("473da924-c93a-11e9-a32f-2a2ae2dbcce4");
+// create button characteristic and allow remote device to get notifications
+BLEByteCharacteristic buttonCharacteristic("473dab7c-c93a-11e9-a32f-2a2ae2dbcce4",
+                                           BLERead | BLENotify);
+// create LED characteristic and allow remote device to read and write
+BLEByteCharacteristic ledCharacteristic("473dacc6-c93a-11e9-a32f-2a2ae2dbcce4",
+                                        BLERead | BLEWrite);
 
-// {72,101,108,108,111,32,87,111,114,108,100};
-
-// 48, 65. 6c, 6c, 6f, 20,57, 6f, 72, 6c, 64
-// h.  e.  l   l.  o.  _  w   o.  r.  l.   d
-// 0b 48 65 6c 6c 6f 20 57 6f 72 6c 64 0
-char *transmitt_char = "Hello World";
+int16_t transmitError;
 
 void setup() {
 
-  Serial.begin(9600);
+  Serial.begin(115200);
   while (!Serial) {
-    ;  // wait until USB CDC port connects... Needed for Leonardo only
+    ;  // wait until USB CDC port connects...
   }
 
-  if (ELECHOUSE_cc1101.getCC1101()) {  // Check the CC1101 Spi connection.
-                                       //    Serial.println("Connection OK");
-  } else {
-    //    Serial.println("Connection Error");
+  if (radio.begin() != RADIOLIB_ERR_NONE) {
+    while (true) {
+      delay(1000);
+    }
   }
 
+  if (radio.setPromiscuousMode() != RADIOLIB_ERR_NONE) {
+    while (true) {
+      delay(1000);
+    }
+  }
 
-  ELECHOUSE_cc1101.Init();               // must be set to initialize the cc1101!
-  ELECHOUSE_cc1101.setCCMode(1);         // set config for internal transmission mode.
-  ELECHOUSE_cc1101.setModulation(0);     // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
-  ELECHOUSE_cc1101.setMHZ(433.92);       // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
-  ELECHOUSE_cc1101.setDeviation(47.60);  // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
-  ELECHOUSE_cc1101.setChannel(0);        // Set the Channelnumber from 0 to 255. Default is cahnnel 0.
-  ELECHOUSE_cc1101.setChsp(199.95);      // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
-  ELECHOUSE_cc1101.setRxBW(812.50);      // Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
-  ELECHOUSE_cc1101.setDRate(99.97);      // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
-  ELECHOUSE_cc1101.setPA(10);            // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
-  ELECHOUSE_cc1101.setSyncMode(0);       // Combined sync-word qualifier mode. 0 = No preamble/sync. 1 = 16 sync word bits detected. 2 = 16/16 sync word bits detected. 3 = 30/32 sync word bits detected. 4 = No preamble/sync, carrier-sense above threshold. 5 = 15/16 + carrier-sense above threshold. 6 = 16/16 + carrier-sense above threshold. 7 = 30/32 + carrier-sense above threshold.
-                                         //  ELECHOUSE_cc1101.setSyncWord(211, 145); // Set sync word. Must be the same for the transmitter and receiver. (Syncword high, Syncword low)
-  ELECHOUSE_cc1101.setAdrChk(0);         // Controls address check configuration of received packages. 0 = No address check. 1 = Address check, no broadcast. 2 = Address check and 0 (0x00) broadcast. 3 = Address check and 0 (0x00) and 255 (0xFF) broadcast.
-  ELECHOUSE_cc1101.setAddr(0);           // Address used for packet filtration. Optional broadcast addresses are 0 (0x00) and 255 (0xFF).
-  ELECHOUSE_cc1101.setWhiteData(0);      // Turn data whitening on / off. 0 = Whitening off. 1 = Whitening on.
-  ELECHOUSE_cc1101.setPktFormat(0);      // Format of RX and TX data. 0 = Normal mode, use FIFOs for RX and TX. 1 = Synchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins. 2 = Random TX mode; sends random data using PN9 generator. Used for test. Works as normal mode, setting 0 (00), in RX. 3 = Asynchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins.
-  ELECHOUSE_cc1101.setLengthConfig(2);   // 0 = Fixed packet length mode. 1 = Variable packet length mode. 2 = Infinite packet length mode. 3 = Reserved
-  ELECHOUSE_cc1101.setPacketLength(0);   // Indicates the packet length when fixed packet length mode is enabled. If variable packet length mode is used, this value indicates the maximum packet length allowed.
-  ELECHOUSE_cc1101.setCrc(0);            // 1 = CRC calculation in TX and CRC check in RX enabled. 0 = CRC disabled for TX and RX.
-  ELECHOUSE_cc1101.setCRC_AF(0);         // Enable automatic flush of RX FIFO when CRC is not OK. This requires that only one packet is in the RXIFIFO and that packet length is limited to the RX FIFO size.
-  ELECHOUSE_cc1101.setDcFilterOff(0);    // Disable digital DC blocking filter before demodulator. Only for data rates ≤ 250 kBaud The recommended IF frequency changes when the DC blocking is disabled. 1 = Disable (current optimized). 0 = Enable (better sensitivity).
-  ELECHOUSE_cc1101.setManchester(0);     // Enables Manchester encoding/decoding. 0 = Disable. 1 = Enable.
-  ELECHOUSE_cc1101.setFEC(0);            // Enable Forward Error Correction (FEC) with interleaving for packet payload (Only supported for fixed packet length mode. 0 = Disable. 1 = Enable.
-                                         //  ELECHOUSE_cc1101.setPRE(0);             // Sets the minimum number of preamble bytes to be transmitted. Values: 0 : 2, 1 : 3, 2 : 4, 3 : 6, 4 : 8, 5 : 12, 6 : 16, 7 : 24
-                                         // ELECHOUSE_cc1101.setPQT(0);             // Preamble quality estimator threshold. The preamble quality estimator increases an internal counter by one each time a bit is received that is different from the previous bit, and decreases the counter by 8 each time a bit is received that is the same as the last bit. A threshold of 4∙PQT for this counter is used to gate sync word detection. When PQT=0 a sync word is always accepted.
-  ELECHOUSE_cc1101.setAppendStatus(0);   // When enabled, two status bytes will be appended to the payload of the packet. The status bytes contain RSSI and LQI values, as well as CRC OK.
+  while (Serial.available()) {
+    // empty buffer
+    Serial.println("emptying " + String(Serial.read()));
+  }
 
+  // begin initialization
+  BLE.begin();
 
-  //  Serial.println("Tx Mode");
+  // set the local name that the peripheral advertises
+  BLE.setLocalName("duplexPeripheral");
+  // set the UUID for the service the peripheral advertises:
+  BLE.setAdvertisedService(duplexService);
+
+  // add the characteristics to the service
+  duplexService.addCharacteristic(ledCharacteristic);
+  duplexService.addCharacteristic(buttonCharacteristic);
+
+  // add the service
+  BLE.addService(duplexService);
+
+  ledCharacteristic.writeValue(0);
+  buttonCharacteristic.writeValue(0);
+
+  // start advertising
+  BLE.advertise();
+  // Serial.println("Peripheral is running");
+
+  // Serial.print("rf");
 }
 
+void sendRF(rfpelilo::SendRFRequest sendRFRequest) {
+  response_.set_command_id(request_.get_command_id());
+  //  radio.setModulation(Modulation. sendRFRequest.get_modulation());  // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
+  if (radio.fixedPacketLengthMode(0) != RADIOLIB_ERR_NONE) {
+    response_.set_command_status(rfpelilo::CommandStatus::RF_PACKET_LENGTH_ERROR);
+    return;
+  }
+  if (radio.setFrequency(sendRFRequest.get_frequency()) != RADIOLIB_ERR_NONE) {
+    response_.set_command_status(rfpelilo::CommandStatus::RF_FREQUENCY_ERROR);
+    return;
+  }
+  if (sendRFRequest.has_deviation()) {
+    if (radio.setFrequencyDeviation(sendRFRequest.get_deviation()) != RADIOLIB_ERR_NONE) {
+      response_.set_command_status(rfpelilo::CommandStatus::RF_FREQUENCY_DEVIATION_ERROR);
+      return;
+    }
+  }
+  if (radio.setBitRate(sendRFRequest.get_dataRate()) != RADIOLIB_ERR_NONE) {
+    response_.set_command_status(rfpelilo::CommandStatus::RF_DATA_RATE_ERROR);
+    return;
+  }
+  int repeat = 1;
+  if (sendRFRequest.has_repeat()) {
+    repeat = sendRFRequest.get_repeat();
+  }
+
+  rfpelilo::CommandStatus transmitStatus = rfpelilo::CommandStatus::RF_TRANSMIT_FAILED;
+  for (int i = 0; i < repeat; i++) {
+    transmitError = radio.transmit((uint8_t *)sendRFRequest.get_data().get_const(), sendRFRequest.get_data().get_length());
+    if (RADIOLIB_ERR_NONE == transmitError) {
+      transmitStatus = rfpelilo::CommandStatus::OK;
+    }
+  }
+  response_.set_command_status(transmitStatus);
+}
+
+
 void loop() {
+  int last;
   read_buffer_.clear();
   while (!Serial.available()) {
   }
-  while (Serial.available()) {
-    read_buffer_.push(Serial.read());
-  }
-  String s = "In loop ";
-  //   Serial.println(s + (lc++) + " read size " + read_buffer_.get_size());
+  uint32_t originalMessageSize = 0;
+  uint32_t messageSize = 0;
+  // read 2 bytes
+  int8_t byte1 = Serial.read();
+  read_buffer_.push(byte1);
+  last = millis();
+  int8_t byte2 = 0;
+  int8_t byte = 0, byten1 = 0, bytem1 = 0, bytem2 = 0, bytem3 = 0;
+  uint8_t fbyte = 0;
 
-  write_buffer_.clear();
-  const auto result = request_.deserialize(read_buffer_);
-  if (EmbeddedProto::Error::NO_ERRORS == result) {
-    //       Serial.println("sending OK response");
-    rfpelilo::SendRFRequest sendRFRequest = request_.get_send_rf_request();
-
-
-
-
-
-    ELECHOUSE_cc1101.setModulation(sendRFRequest.get_modulation());  // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
-    ELECHOUSE_cc1101.setMHZ(sendRFRequest.get_frequency());          // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
-    if (sendRFRequest.has_deviation()) {
-      ELECHOUSE_cc1101.setDeviation(sendRFRequest.get_deviation());  // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
-    }
-
-
-
-
-    ELECHOUSE_cc1101.setDRate(sendRFRequest.get_dataRate());  // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
-
-
-
-    int repeat = 1;
-    if (sendRFRequest.has_repeat()) {
-      repeat = sendRFRequest.get_repeat();
-    }
-
-repeat = 5;
-    for (int i = 0; i < repeat; i++) {
-      send(transmitt_byte  , sendRFRequest.get_data().get_length());
-      // sendRFRequest.get_data().get_const()
-    } 
-
-
-    response_.set_command_id(request_.get_command_id());
-    response_.set_command_status(rfpelilo::CommandStatus::OK);
-    const auto wresult = response_.serialize(write_buffer_);
-    if (EmbeddedProto::Error::NO_ERRORS == wresult) {
-      Serial.write(write_buffer_.get_data(), write_buffer_.get_size());
-      String o = "OK response sent ";
-
-      // Serial.println(o + write_buffer_.get_size() + " size");
-
-    } else {
-      // Serial.println("Cannot send OK response");
-    }
-  } else {
-    //     Serial.println("sending ERROR response");
-
-    response_.set_command_id(-1);
-    response_.set_command_status(rfpelilo::CommandStatus::ERROR);
-    const auto wresult = response_.serialize(write_buffer_);
-    if (EmbeddedProto::Error::NO_ERRORS == wresult) {
-      Serial.write(write_buffer_.get_data(), write_buffer_.get_size());
-    } else {
-      //  Serial.println("Cannot send ERROR response");
-    }
-  }
-  delay(1000);
-}
-
-void hardReset(){	
-	digitalWrite(SS_PIN, LOW);
-	delay(1);
-	digitalWrite(SS_PIN, HIGH);
-	delay(1);
-	spiStartTransaction();
-	SPI.transfer(CC1101_SRES);
-	spiEndTransaction();
-	spiStrobe(CC1101_SCAL);
-}
-
-void send(const byte *data, byte size) {
-  ELECHOUSE_cc1101.SpiWriteBurstReg(CC1101_TXFIFO, (byte *)data, size);  //write data to send
-  ELECHOUSE_cc1101.SpiStrobe(CC1101_SIDLE);
-  ELECHOUSE_cc1101.SpiStrobe(CC1101_STX);  //start send
-  waitTXDone();
-  ELECHOUSE_cc1101.SpiStrobe(CC1101_SFTX);  //flush TXfifo
-}
-
-void waitTXDone() {  //wait for end of transmission : FIFO size=0 cc1101.pdf p94
-  int txbytes;
   do {
-    txbytes = ELECHOUSE_cc1101.SpiReadStatus(CC1101_TXBYTES);
-  } while (txbytes > 0);
+    while (!Serial.available()) {
+      if (millis() - last > TIMEOUT_MILLI) {
+        // timeout : clear input
+        while (Serial.available()) { Serial.read(); }
+        goto input_error;
+      }
+      last = millis();
+    }
+    byte2 = Serial.read();
+    read_buffer_.push(byte2);
+    if (EmbeddedProto::Error::NO_ERRORS != ::EmbeddedProto::WireFormatter::DeserializeVarint(read_buffer_, messageSize)) {
+      // error : clear input
+      while (Serial.available()) { Serial.read(); }
+      goto input_error;
+    }
+    // read_buffer_.pop(byte);
+    originalMessageSize = messageSize;
+    // read_buffer_.push(byte2);
+    if (read_buffer_.peek(fbyte)) {
+      // not empty : 1 byte size
+      messageSize--;
+      // we already read one byte from the message
+    }
+    int bytem1set = 0;
+    while (messageSize > 0) {
+      while (!Serial.available()) {
+        if (millis() - last > TIMEOUT_MILLI) {
+          // timeout : clear input
+          while (Serial.available()) { Serial.read(); }
+          goto input_error;
+        }
+        last = millis();
+      }
+      byten1 = byte;
+
+      byte = Serial.read();
+
+      if (bytem1set == 0) {
+        bytem1 = byte;
+        bytem1set++;
+      } else if (bytem1set == 1) {
+        bytem2 = byte;
+        bytem1set++;
+
+      } else if (bytem1set == 2) {
+        bytem3 = byte;
+        bytem1set++;
+      }
+      // Serial.println(byte);
+      read_buffer_.push(byte);
+      //  originalMessageSize = byte;
+
+      messageSize--;
+    }
+    //    Serial.println("Finished " + String(messageSize));
+
+
+    write_buffer_.clear();
+    const auto result = request_.deserialize(read_buffer_);
+    if (EmbeddedProto::Error::NO_ERRORS == result) {
+      // Serial.println("NO_ERRORS deserialize");
+      rfpelilo::SendRFRequest sendRFRequest = request_.get_send_rf_request();
+      sendRF(sendRFRequest);
+
+      EmbeddedProto::FieldString<200> textValue;
+      String s = String(byte1) + " DES_OK " + String(byte2) + " or " + String(originalMessageSize) + " length " + sendRFRequest.get_data().get_length() + " RADIOLIB_CC1101_MAX_PACKET_LENGTH " + String(RADIOLIB_CC1101_MAX_PACKET_LENGTH) + " transmitError " + String(transmitError);
+      textValue.set(s.c_str());
+      rfpelilo::ErrorMessage errorMessage;
+      errorMessage.set_text(textValue);
+      response_.set_error_message(errorMessage);
+
+
+      ::EmbeddedProto::WireFormatter::SerializeVarint(response_.serialized_size(), write_buffer_);
+      const auto wresult = response_.serialize(write_buffer_);
+      if (EmbeddedProto::Error::NO_ERRORS == wresult) {
+        Serial.write(write_buffer_.get_data(), write_buffer_.get_size());
+      } else {
+        goto input_error;
+      }
+    } else {
+      goto input_error;
+    }
+    return;
+  } while (false);
+
+input_error:
+  write_buffer_.clear();
+  response_.set_command_id(-1);
+  response_.set_command_status(rfpelilo::CommandStatus::ERROR);
+  EmbeddedProto::FieldString<200> textValue;
+  String s = String("input_error b1 ") + String(byte1) + " b2 " + String(byte2) + " or " + String(originalMessageSize) + " messageSize " + String(messageSize) + " fbyte " + String((int8_t)fbyte) + " ms " + String(messageSize) + " bytem1 " + String(bytem1) + " bytem2 " + String(bytem2) + " bytem3 " + String(bytem3) + " ... byten1 " + String(byten1) + " byten " + String(byte);
+  textValue.set(s.c_str());
+  rfpelilo::ErrorMessage errorMessage;
+  errorMessage.set_text(textValue);
+  response_.set_error_message(errorMessage);
+  ::EmbeddedProto::WireFormatter::SerializeVarint(response_.serialized_size(), write_buffer_);
+  const auto wresult = response_.serialize(write_buffer_);
+  if (EmbeddedProto::Error::NO_ERRORS == wresult) {
+    Serial.write(write_buffer_.get_data(), write_buffer_.get_size());
+  } else {
+    Serial.println("Cannot print error");
+  }
 }

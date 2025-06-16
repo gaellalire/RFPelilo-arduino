@@ -1,0 +1,38 @@
+Port flipper
+
+1 
+2 MOSI
+3 MISO
+4 CS
+5 SCK
+6 GD0
+7 
+8
+9 3v3
+10
+11 GND
+
+
+- 2 MOSI -> violet -> pin 11
+- 3 MISO -> bleu -> pin 12
+- 4 CS[N] -> vert -> pin 10 (SS ?)
+- 5 SCK -> jaune -> pin 13
+6 GD[O]0 -> orange -> pin 2 ou 6  [irq for interrupt/GPIO]
+9 3v3 -> rouge -> 3V
+11 GND -> marron -> GND
+
+GD[O]2 -> none -> [gpio for additional interrupt/GPIO]
+
+
+
+
+11 9
+6 4. ---->>
+5 2
+3 x
+
+
+GND 3v3
+GD0 CS ---->>
+SCK MOSI
+MISO x
