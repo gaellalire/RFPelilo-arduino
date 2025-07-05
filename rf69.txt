@@ -1,0 +1,11 @@
+
+Vin connects to the Arduino 5V pin. If you're using a 3.3V Arduino, connect to 3.3V
+GND connects to Arduino ground
+SCLK connects to SPI clock. On Arduino Uno/Duemilanove/328-based, thats Digital 13. On Mega's, its Digital 52 and on Leonardo/Due its ICSP-3 (See SPI Connections for more details)
+MISO connects to SPI MISO. On Arduino Uno/Duemilanove/328-based, thats Digital 12. On Mega's, its Digital 50 and on Leonardo/Due its ICSP-1 (See SPI Connections for more details)
+MOSI connects to SPI MOSI. On Arduino Uno/Duemilanove/328-based, thats Digital 11. On Mega's, its Digital 51 and on Leonardo/Due its ICSP-4 (See SPI Connections for more details)
+CS connects to our SPI Chip Select pin. We'll be using Digital 4 but you can later change this to any pin
+RST connects to our radio reset pin. We'll be using Digital 2 but you can later change this pin too.
+G0 (IRQ) connects to an interrupt-capable pin. We'll be using Digital 3 but you can later change this pin too. However, it must connect a hardware Interrupt pin. Not all pins can do this! Check the board documentation for which pins are hardware interrupts, you'll also need the hardware interrupt number. For example, on UNO digital 3 is interrupt #1
+
+
