@@ -19,6 +19,21 @@ message SendRFRequest {
     float dataRate = 4;
     bytes data = 5 [(EmbeddedProto.options).maxLength = 255];
     optional uint32 repeat = 6;
+    optional uint32 repeatDelay = 7;
+}
+
+message ReceiveRFRequest {
+    uint32 modulation = 1;
+    float frequency = 2;
+    optional float deviation = 3;
+    float dataRate = 4;
+    float bandwidth = 5;
+    float rssiThreshold = 6;
+    uint32 maxMessageLength = 7;
+}
+
+message ReceiveRFResponse {
+    bytes data = 1 [(EmbeddedProto.options).maxLength = 255];
 }
 
 enum CommandStatus {
@@ -42,5 +57,7 @@ message Main {
         Empty empty = 4;
         SendRFRequest send_rf_request = 5;
         ErrorMessage error_message = 6;
+        ReceiveRFRequest receive_rf_request = 7;
+        ReceiveRFResponse receive_rf_response = 8;
     }
 }
