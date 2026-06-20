@@ -21,6 +21,9 @@
 #include <RadioLib.h>
 #include <FieldStringBytes.h>
 
+#include <Adafruit_NeoPixel.h>
+
+Adafruit_NeoPixel pixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
 #if defined(CC1101_RADIO)
 // CC1101 has the following connections:
@@ -42,9 +45,48 @@ RF69 radio = new Module(10, 3, 2, 4);
 // use internal radio pin
 RF69 radio = new Module(16, 21, 17, 22);
 #define RF69_RADIO 1
-#define DATA_PIN  PIN_RFM_DIO2
+#define DATA_PIN PIN_RFM_DIO2
 #define MAX_PACKET_LENGTH RADIOLIB_RF69_MAX_PACKET_LENGTH
 #endif
+
+#define LED_LISTENING 1
+#define LED_RECEIVING 2
+#define LED_SENDING 3
+
+void showLed(int mode) {
+#if defined(ARDUINO_ADAFRUIT_FEATHER_RP2040_RFM)
+  switch (mode) {
+    case LED_LISTENING:
+    pixel.setPixelColor(0, pixel.Color(0, 0, 255)); // Blue
+    break;
+    case LED_RECEIVING:
+    pixel.setPixelColor(0, pixel.Color(0, 255, 0)); // Green
+    break;
+    case LED_SENDING:
+    pixel.setPixelColor(0, pixel.Color(255, 0, 0)); // Red
+    break;
+    default:
+    pixel.clear();
+  }
+  pixel.show();
+#else
+  if (mode == LED_LISTENING) {
+    digitalWrite(LED_BUILTIN, LOW);
+  } else {
+    digitalWrite(LED_BUILTIN, HIGH);
+  }
+#endif
+}
+
+void clearLed() {
+#if defined(ARDUINO_ADAFRUIT_FEATHER_RP2040_RFM)
+  pixel.clear();
+  pixel.show();
+#else
+  digitalWrite(LED_BUILTIN, LOW);
+#endif
+}
+
 
 ::rfpelilo::Main request_;
 ::rfpelilo::Main response_;
@@ -53,6 +95,15 @@ EmbeddedProto::ReadBufferFixedSize<550> read_buffer_;
 EmbeddedProto::WriteBufferFixedSize<550> write_buffer_;
 
 volatile bool fifoEmpty = false;
+
+bool sending = false;
+uint32_t sendingCommandId;
+int nextSendTime;
+RadioLibTime_t sendingTimeout;
+uint8_t txBuffer[256];
+uint8_t messageLength;
+int repeat;
+int repeatDelay;
 
 #if defined(ESP8266) || defined(ESP32)
 ICACHE_RAM_ATTR
@@ -63,8 +114,9 @@ void fifoAdd(void) {
 }
 
 bool receiving = false;
+bool receivingLed = false;
 uint32_t receivingCommandId;
-volatile uint8_t maxMessageLength = 100;
+volatile uint8_t maxMessageLength;
 
 volatile uint8_t bitCount = 0;
 volatile uint8_t rxBuffer[256];
@@ -81,7 +133,7 @@ void readBit(void) {
   bitCount++;
 
   if (bitCount == 8) {
-    if(rxIndex < maxMessageLength) {
+    if (rxIndex < maxMessageLength) {
       rxBuffer[rxIndex++] = currentByte;
     }
     currentByte = 0;
@@ -127,9 +179,9 @@ void txCharacteristicWritten(BLEDevice central, BLECharacteristic characteristic
     if (request_.has_send_rf_request()) {
       rfpelilo::SendRFRequest sendRFRequest = request_.get_send_rf_request();
       // Serial.println(String("sendRFRequest freq ") + String(sendRFRequest.get_frequency()));
-      digitalWrite(LED_BUILTIN, HIGH);
+      showLed(LED_SENDING);
       sendRF(sendRFRequest);
-      digitalWrite(LED_BUILTIN, LOW);
+      clearLed();
 
       ::EmbeddedProto::WireFormatter::SerializeVarint(response_.serialized_size(), write_buffer_);
       if (EmbeddedProto::Error::NO_ERRORS == response_.serialize(write_buffer_)) {
@@ -148,6 +200,11 @@ void txCharacteristicWritten(BLEDevice central, BLECharacteristic characteristic
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
+
+#if defined(ARDUINO_ADAFRUIT_FEATHER_RP2040_RFM)
+  pixel.begin();
+  pixel.setBrightness(25);  // 0-255
+#endif
 
 #if defined(BLE_ACTIVATED)
 
@@ -216,7 +273,39 @@ void setup() {
   }
 #endif
 #endif
+}
 
+void clearSending() {
+  if (!sending) {
+    return;
+  }
+  response_.clear();
+  response_.set_command_id(sendingCommandId);
+  response_.set_has_next(false);
+  response_.set_command_status(rfpelilo::CommandStatus::INTERRUPTED);
+  sendResponse();
+  sending = false;
+}
+
+void verifySending() {
+  if (!sending || millis() < nextSendTime) {
+    return;
+  }
+  response_.clear();
+  response_.set_command_id(sendingCommandId);
+  if (repeat <= 1) {
+    sending = false;
+    response_.set_has_next(false);
+  } else {
+    repeat--;
+    response_.set_has_next(true);
+  }
+  showLed(LED_SENDING);
+  doSend();
+  clearLed();
+  nextSendTime += repeatDelay;
+  radio.standby();
+  sendResponse();
 }
 
 void clearReceiving() {
@@ -225,8 +314,12 @@ void clearReceiving() {
   }
   response_.clear();
   response_.set_command_id(receivingCommandId);
+  response_.set_command_status(rfpelilo::CommandStatus::INTERRUPTED);
   response_.set_has_next(false);
+  radio.packetMode(); // clear direct mode
   radio.standby();
+  receivingLed = false;
+  clearLed();
   rxIndex = 0;
   bitCount = 0;
   currentByte = 0;
@@ -235,9 +328,18 @@ void clearReceiving() {
 }
 
 void verifyReceiving() {
-  if (!receiving || rxIndex != maxMessageLength) {
+  if (!receiving) {
     return;
   }
+  if (rxIndex != 0 && !receivingLed) {
+    receivingLed = true;
+    showLed(LED_RECEIVING);
+  }
+  if (rxIndex != maxMessageLength) {
+    return;
+  }
+  showLed(LED_LISTENING);
+  receivingLed = false;
   response_.clear();
   response_.set_command_id(receivingCommandId);
   response_.set_has_next(true);
@@ -255,15 +357,15 @@ void receiveRF(rfpelilo::ReceiveRFRequest receiveRFRequest) {
   response_.set_has_next(true);
 
   bool modulationHasDeviation = false;
-  switch(receiveRFRequest.get_modulation()) {
-    case 0: // FSK
-    // default do nothing
-    radio.setOOK(false);
-    modulationHasDeviation = true;
-    break;
-    case 1: // ASK
-    radio.setOOK(true);
-    break;
+  switch (receiveRFRequest.get_modulation()) {
+    case 0:  // FSK
+      // default do nothing
+      radio.setOOK(false);
+      modulationHasDeviation = true;
+      break;
+    case 1:  // ASK
+      radio.setOOK(true);
+      break;
   }
   maxMessageLength = receiveRFRequest.get_maxMessageLength();
 
@@ -289,25 +391,75 @@ void receiveRF(rfpelilo::ReceiveRFRequest receiveRFRequest) {
   radio.receiveDirect();
   receivingCommandId = request_.get_command_id();
   receiving = true;
+  showLed(LED_LISTENING);
   response_.set_command_status(rfpelilo::CommandStatus::RF_DATA_RATE_ERROR);
 }
 
+void doSend() {
+  int16_t transmitError = RADIOLIB_ERR_NONE;
+  rfpelilo::CommandStatus transmitStatus = rfpelilo::CommandStatus::RF_TRANSMIT_FAILED;
+  if (messageLength > MAX_PACKET_LENGTH) {
+#if defined(RF69_RADIO)
+    messageLength++;  // FIXME remove this hack, last byte is ignored
+    int remLength = messageLength;
+    // calculate timeout (5ms + 500 % of expected time-on-air)
+    RadioLibTime_t start = millis();
+
+    transmitError = radio.startTransmit(txBuffer, messageLength);
+
+    if (RADIOLIB_ERR_NONE == transmitError) {
+
+      bool transmittedFlag = false;
+      bool timeoutExpired = false;
+      while (!transmittedFlag) {
+        if (millis() - start > sendingTimeout) {
+          // timeout
+          timeoutExpired = true;
+          break;
+        }
+        if (fifoEmpty) {
+          // reset flag
+          fifoEmpty = false;
+
+          // add more bytes to the transmit buffer
+          transmittedFlag = radio.fifoAdd(txBuffer, messageLength, &remLength);
+        }
+      }
+      radio.standby();
+      if (!timeoutExpired) {
+        transmitStatus = rfpelilo::CommandStatus::OK;
+      }
+    }
+#endif
+  } else {
+    transmitError = radio.transmit(txBuffer, messageLength);
+    if (RADIOLIB_ERR_NONE == transmitError) {
+      transmitStatus = rfpelilo::CommandStatus::OK;
+    }
+  }
+  response_.set_command_status(transmitStatus);
+
+  if (transmitError != RADIOLIB_ERR_NONE) {
+    String s = "TransmitError " + String(transmitError);
+    response_.mutable_error_message().mutable_text().set(s.c_str());
+  }
+}
 
 void sendRF(rfpelilo::SendRFRequest sendRFRequest) {
   response_.set_command_id(request_.get_command_id());
 
   bool modulationHasDeviation = false;
-  switch(sendRFRequest.get_modulation()) {
-    case 0: // FSK
-    // default do nothing
-    radio.setOOK(false);
-    modulationHasDeviation = true;
-    break;
-    case 1: // ASK
-    radio.setOOK(true);
-    break;
+  switch (sendRFRequest.get_modulation()) {
+    case 0:  // FSK
+      // default do nothing
+      radio.setOOK(false);
+      modulationHasDeviation = true;
+      break;
+    case 1:  // ASK
+      radio.setOOK(true);
+      break;
   }
-  uint32_t messageLength = sendRFRequest.get_data().get_length();
+  messageLength = sendRFRequest.get_data().get_length();
   if (messageLength > MAX_PACKET_LENGTH) {
     if (radio.fixedPacketLengthMode(0) != RADIOLIB_ERR_NONE) {
       response_.set_command_status(rfpelilo::CommandStatus::RF_PACKET_LENGTH_ERROR);
@@ -335,60 +487,34 @@ void sendRF(rfpelilo::SendRFRequest sendRFRequest) {
     response_.set_command_status(rfpelilo::CommandStatus::RF_DATA_RATE_ERROR);
     return;
   }
-  int repeat = 1;
+  repeat = 1;
   if (sendRFRequest.has_repeat()) {
     repeat = sendRFRequest.get_repeat();
   }
-  radio.setFifoEmptyAction(fifoAdd);
-
-  int16_t transmitError = RADIOLIB_ERR_NONE;
-  rfpelilo::CommandStatus transmitStatus = rfpelilo::CommandStatus::RF_TRANSMIT_FAILED;
-  uint8_t *txBuffPtr = (uint8_t *)sendRFRequest.get_data().get_const();
-  for (int i = 0; i < repeat; i++) {
-    if (messageLength > MAX_PACKET_LENGTH) {
-#if defined(RF69_RADIO)
-      messageLength++; // FIXME remove this hack, last byte is ignored
-      int remLength = messageLength;
-      // calculate timeout (5ms + 500 % of expected time-on-air)
-      RadioLibTime_t timeout = 5 + (RadioLibTime_t)((((float)(messageLength * 8)) / bitRate) * 5);
-      RadioLibTime_t start = millis();
-
-      transmitError = radio.startTransmit(txBuffPtr, messageLength);
-
-      bool transmittedFlag = false;
-      bool timeoutExpired = false;
-      while (!transmittedFlag) {
-        if (millis() - start > timeout) {
-          // timeout
-          timeoutExpired = true;
-          break;
-        }
-        if (fifoEmpty) {
-          // reset flag
-          fifoEmpty = false;
-
-          // add more bytes to the transmit buffer
-          transmittedFlag = radio.fifoAdd(txBuffPtr, messageLength, &remLength);
-        }
-      }
-      radio.standby();
-      if (!timeoutExpired) {
-        transmitStatus = rfpelilo::CommandStatus::OK;
-      }
-#endif
-    } else {
-      transmitError = radio.transmit((uint8_t *)sendRFRequest.get_data().get_const(), messageLength);
-      if (RADIOLIB_ERR_NONE == transmitError) {
-        transmitStatus = rfpelilo::CommandStatus::OK;
-      }
-    }
+  repeatDelay = 0;
+  if (sendRFRequest.has_repeatDelay()) {
+    repeatDelay = sendRFRequest.get_repeatDelay();
   }
 
-  response_.set_command_status(transmitStatus);
+  radio.setFifoEmptyAction(fifoAdd);
 
-  if (transmitError != RADIOLIB_ERR_NONE) {
-    String s = "TransmitError " + String(transmitError);
-    response_.mutable_error_message().mutable_text().set(s.c_str());
+  uint8_t *txBuffPtr = (uint8_t *)sendRFRequest.get_data().get_const();
+  for (int i = 0; i < messageLength; i++) {
+    txBuffer[i] = txBuffPtr[i];
+  }
+  sendingTimeout = 5 + (RadioLibTime_t)((((float)(messageLength * 8)) / bitRate) * 5);
+
+  if (repeatDelay != 0 && repeat > 1) {
+    nextSendTime = millis();
+    doSend();
+    repeat--;
+    nextSendTime += repeatDelay;
+    sending = true;
+    sendingCommandId = request_.get_command_id();
+  } else {
+    for (int i = 0; i < repeat; i++) {
+      doSend();
+    }
   }
 }
 
@@ -409,135 +535,155 @@ void sendError(String errorText) {
 
 // unsigned char mes[3] = { 170, 25, 132 };
 unsigned char mes[] = {
-    /* 0xCC repeated many times ... */
-    0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  /* 0xCC repeated many times ... */
+  0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
 
-    0x0F, 0xD0, 0x14, 0x04, 0x91,
-    0x7F, 0xDE, 0xB6, 0x4D, 0x0B, 
-    0x5B, 0xC0, 0x30, 0x0C, 0x03, 
-    0x00, 0xDF, 0xF0, 0x0C, 0x03, 
-    0x00, 0xC0, 0x30, 0x0C, 0x03, 
-    0x00, 0xC3, 0xF0, 0x0C, 0x03, 
-    0x50, 0xC7, 0x71, 0x07, 0xF0
+  0x0F, 0xD0, 0x14, 0x04, 0x91,
+  0x7F, 0xDE, 0xB6, 0x4D, 0x0B,
+  0x5B, 0xC0, 0x30, 0x0C, 0x03,
+  0x00, 0xDF, 0xF0, 0x0C, 0x03,
+  0x00, 0xC0, 0x30, 0x0C, 0x03,
+  0x00, 0xC3, 0xF0, 0x0C, 0x03,
+  0x50, 0xC7, 0x71, 0x07, 0xF0
 };
 
 unsigned char mes1[] = {
-    /* 0xCC repeated many times ... */
-    0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  /* 0xCC repeated many times ... */
+  0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
 
-    0x0F, 0xD0, 0x14, 0x04, 0x91,
-    0x7F, 0xC3, 0x32, 0x5D, 0x03,
-    0x04, 0xC6, 0x71, 0x07, 0xF0
+  0x0F, 0xD0, 0x14, 0x04, 0x91,
+  0x7F, 0xC3, 0x32, 0x5D, 0x03,
+  0x04, 0xC6, 0x71, 0x07, 0xF0
 };
 
 unsigned char mes2[] = {
-    /* 0xCC repeated many times ... */
-    0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  /* 0xCC repeated many times ... */
+  0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+  0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
 
-    0x0F, 0xD0, 0x14, 0x04, 0x91,
-    0x7F, 0xC3, 0x32, 0x5D, 0x03,
-    0x04, 0xC6, 0x71, 0x07, 0xF0
+  0x0F, 0xD0, 0x14, 0x04, 0x91,
+  0x7F, 0xC3, 0x32, 0x5D, 0x03,
+  0x04, 0xC6, 0x71, 0x07, 0xF0
 };
+
+void sendMain2() {
+   Serial.println("main2");
+  int m = 0;
+  rfpelilo::SendRFRequest sendRFRequest;
+  ::EmbeddedProto::FieldBytes<255> data;
+  data.set(mes1, sizeof(mes1));
+  // sendRFRequest.set_modulation(mod % 2);
+  sendRFRequest.set_modulation(1);
+  sendRFRequest.set_data(data);
+
+  sendRFRequest.set_frequency(868.684); // scoreboard
+  // sendRFRequest.set_frequency(868.89325);  // console
+  sendRFRequest.set_deviation(15.0);
+  sendRFRequest.set_dataRate(10.0);
+  sendRFRequest.set_repeat(5);
+  sendRFRequest.set_repeatDelay(150);
+  digitalWrite(LED_BUILTIN, HIGH);
+  sendRF(sendRFRequest);
+  digitalWrite(LED_BUILTIN, LOW);
+}
 
 
 void sendMain() {
-    int m = 0;
-    rfpelilo::SendRFRequest sendRFRequest;
-    ::EmbeddedProto::FieldBytes<255> data;
-    data.set(mes1, sizeof(mes1));
-    // sendRFRequest.set_modulation(mod % 2);
-    sendRFRequest.set_modulation(1);
+  int m = 0;
+  rfpelilo::SendRFRequest sendRFRequest;
+  ::EmbeddedProto::FieldBytes<255> data;
+  data.set(mes1, sizeof(mes1));
+  // sendRFRequest.set_modulation(mod % 2);
+  sendRFRequest.set_modulation(1);
+  sendRFRequest.set_data(data);
+
+  //    sendRFRequest.set_frequency(868.684); // scoreboard
+  sendRFRequest.set_frequency(868.89325);  // console
+  sendRFRequest.set_deviation(15.0);
+  sendRFRequest.set_dataRate(10.0);
+  sendRFRequest.set_repeat(1);
+  while (1) {
+    digitalWrite(LED_BUILTIN, HIGH);
+
+    m = (m + 1) % 3;
+    if (m == 0) {
+      data.set(mes1, sizeof(mes1));
+    } else if (m == 1) {
+      data.set(mes2, sizeof(mes2));
+    } else if (m == 2) {
+      data.set(mes, sizeof(mes));
+    }
     sendRFRequest.set_data(data);
-    
-//    sendRFRequest.set_frequency(868.684); // scoreboard
-    sendRFRequest.set_frequency(868.89325); // console
-    sendRFRequest.set_deviation(15.0);
-    sendRFRequest.set_dataRate(10.0);
-    sendRFRequest.set_repeat(1);
-      while (1) {
-      digitalWrite(LED_BUILTIN, HIGH);
-      
-      m = (m+1)%3;
-      if (m == 0) {
-    data.set(mes1, sizeof(mes1));
-      } else if (m == 1) {
-    data.set(mes2, sizeof(mes2));
-      } else if (m == 2) {
-    data.set(mes, sizeof(mes));
-      }
-          sendRFRequest.set_data(data);
-          
 
-      sendRF(sendRFRequest);
-      digitalWrite(LED_BUILTIN, LOW);
-      delay(1300);
-      }
 
+    sendRF(sendRFRequest);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(1300);
+  }
 }
 
 void receiveMain() {
-      Serial.println("receiveMain");
+  Serial.println("receiveMain");
 
-    rfpelilo::ReceiveRFRequest receiveRFRequest;
-    // sendRFRequest.set_modulation(mod % 2);
-    receiveRFRequest.set_modulation(1);
-    
-    receiveRFRequest.set_frequency(868.684); // scoreboard
-//    sendRFRequest.set_frequency(868.89325); // console
-    receiveRFRequest.set_deviation(15.0);
-    receiveRFRequest.set_dataRate(10.0);
-    receiveRFRequest.set_bandwidth(100.0);
-    receiveRFRequest.set_rssiThreshold(-85);
-    receiveRFRequest.set_maxMessageLength(100);
-      //while (1) {
-      receiveRF(receiveRFRequest);
-      // response_.get_receive_rf_response().get_data();
-      /*
+  rfpelilo::ReceiveRFRequest receiveRFRequest;
+  // sendRFRequest.set_modulation(mod % 2);
+  receiveRFRequest.set_modulation(1);
+
+  receiveRFRequest.set_frequency(868.684);  // scoreboard
+                                            //    sendRFRequest.set_frequency(868.89325); // console
+  receiveRFRequest.set_deviation(15.0);
+  receiveRFRequest.set_dataRate(10.0);
+  receiveRFRequest.set_bandwidth(100.0);
+  receiveRFRequest.set_rssiThreshold(-85);
+  receiveRFRequest.set_maxMessageLength(100);
+  //while (1) {
+  receiveRF(receiveRFRequest);
+  // response_.get_receive_rf_response().get_data();
+  /*
       const unsigned char * buf = response_.get_receive_rf_response().get_data().get_const();
       for (int i = 0; i < 100; i++) {
         for (int bit = 7; bit >= 0; bit--) {
@@ -548,7 +694,6 @@ void receiveMain() {
 
       }
       */
-
 }
 
 void sendResponse() {
@@ -565,15 +710,23 @@ bool firstCommand = false;
 
 void loop() {
   if (firstCommand) {
-   sendMain();
-//   receiveMain();
-   firstCommand = false;
+    while (!Serial) ;
+      Serial.println("firstCommand");
+
+       receiveMain();
+      Serial.println("receiveMain returned " + String(receiving));
+      clearReceiving();  // clear previous receiving call
+    sendMain2();
+      Serial.println("sendMain2 returned " + String(receiving));
+    //   sendMain();
+    firstCommand = false;
   }
 
   int last;
   read_buffer_.clear();
 
   while (!Serial.available()) {
+    verifySending();
     verifyReceiving();
 #if defined(BLE_ACTIVATED)
     BLE.poll();
@@ -625,15 +778,16 @@ void loop() {
 
     request_.clear();
     if (EmbeddedProto::Error::NO_ERRORS == request_.deserialize(read_buffer_)) {
-      clearReceiving(); // clear previous receiving call
+      clearReceiving();  // clear previous receiving call
+      clearSending();    // clear previous sending call
       response_.clear();
       switch (request_.get_which_content()) {
         case rfpelilo::Main::FieldNumber::SEND_RF_REQUEST:
           {
             rfpelilo::SendRFRequest sendRFRequest = request_.get_send_rf_request();
-            digitalWrite(LED_BUILTIN, HIGH);
+            showLed(LED_SENDING);
             sendRF(sendRFRequest);
-            digitalWrite(LED_BUILTIN, LOW);
+            clearLed();
           }
           break;
 

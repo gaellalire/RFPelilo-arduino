@@ -46,6 +46,7 @@ enum CommandStatus {
     RF_DATA_RATE_ERROR = 4;
     RF_PACKET_LENGTH_ERROR = 5;
     RF_TRANSMIT_FAILED = 6;
+    INTERRUPTED = 7;
 }
 
 

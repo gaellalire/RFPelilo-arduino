@@ -31,7 +31,8 @@ enum class CommandStatus : uint32_t
   RF_FREQUENCY_DEVIATION_ERROR = 3,
   RF_DATA_RATE_ERROR = 4,
   RF_PACKET_LENGTH_ERROR = 5,
-  RF_TRANSMIT_FAILED = 6
+  RF_TRANSMIT_FAILED = 6,
+  INTERRUPTED = 7
 };
 
 class Empty final: public ::EmbeddedProto::MessageInterface
