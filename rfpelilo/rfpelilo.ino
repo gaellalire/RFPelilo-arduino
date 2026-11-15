@@ -236,7 +236,7 @@ void setup() {
 #endif
 
   ConfigFSK_t config;
-  int16_t beginError = radio.begin();
+  int16_t beginError = radio.begin(config);
   if (beginError != RADIOLIB_ERR_NONE && beginError != RADIOLIB_ERR_UNSUPPORTED) {
     String errorText = String("Cannot begin ") + String(beginError);
     sendError(errorText);
@@ -484,18 +484,18 @@ void sendRF(rfpelilo::SendRFRequest sendRFRequest) {
     }
   }
 
-  if (radio.setFrequency(sendRFRequest.get_frequency()) != RADIOLIB_ERR_NONE) {
+  if (radio.setFrequency(sendRFRequest.get_frequency() * 1000000) != RADIOLIB_ERR_NONE) {
     response_.set_command_status(rfpelilo::CommandStatus::RF_FREQUENCY_ERROR);
     return;
   }
   if (modulationHasDeviation && sendRFRequest.has_deviation()) {
-    if (radio.setFrequencyDeviation(sendRFRequest.get_deviation()) != RADIOLIB_ERR_NONE) {
+    if (radio.setFrequencyDeviation(sendRFRequest.get_deviation() * 1000) != RADIOLIB_ERR_NONE) {
       response_.set_command_status(rfpelilo::CommandStatus::RF_FREQUENCY_DEVIATION_ERROR);
       return;
     }
   }
   float bitRate = sendRFRequest.get_dataRate();
-  if (radio.setBitRate(bitRate) != RADIOLIB_ERR_NONE) {
+  if (radio.setBitRate(bitRate * 1000) != RADIOLIB_ERR_NONE) {
     response_.set_command_status(rfpelilo::CommandStatus::RF_DATA_RATE_ERROR);
     return;
   }
@@ -759,6 +759,7 @@ void loop() {
       Serial.println("sendMain2 returned " + String(receiving));
     //   sendMain();
     */
+    sendMain();
     firstCommand = false;
   }
 
