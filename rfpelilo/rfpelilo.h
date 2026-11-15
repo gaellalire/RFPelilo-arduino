@@ -1105,6 +1105,24 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
         clear_repeatDelay();
       }
 
+      if(rhs.has_paRamp())
+      {
+        set_paRamp(rhs.get_paRamp());
+      }
+      else
+      {
+        clear_paRamp();
+      }
+
+      if(rhs.has_outputPower())
+      {
+        set_outputPower(rhs.get_outputPower());
+      }
+      else
+      {
+        clear_outputPower();
+      }
+
     }
 
     SendRFRequest(const SendRFRequest&& rhs ) noexcept
@@ -1140,6 +1158,24 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
         clear_repeatDelay();
       }
 
+      if(rhs.has_paRamp())
+      {
+        set_paRamp(rhs.get_paRamp());
+      }
+      else
+      {
+        clear_paRamp();
+      }
+
+      if(rhs.has_outputPower())
+      {
+        set_outputPower(rhs.get_outputPower());
+      }
+      else
+      {
+        clear_outputPower();
+      }
+
     }
 
     ~SendRFRequest() override = default;
@@ -1153,7 +1189,9 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       DATARATE = 4,
       DATA = 5,
       REPEAT = 6,
-      REPEATDELAY = 7
+      REPEATDELAY = 7,
+      PARAMP = 8,
+      OUTPUTPOWER = 9
     };
 
     SendRFRequest& operator=(const SendRFRequest& rhs)
@@ -1187,6 +1225,24 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       else
       {
         clear_repeatDelay();
+      }
+
+      if(rhs.has_paRamp())
+      {
+        set_paRamp(rhs.get_paRamp());
+      }
+      else
+      {
+        clear_paRamp();
+      }
+
+      if(rhs.has_outputPower())
+      {
+        set_outputPower(rhs.get_outputPower());
+      }
+      else
+      {
+        clear_outputPower();
       }
 
       return *this;
@@ -1223,6 +1279,24 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       else
       {
         clear_repeatDelay();
+      }
+      
+      if(rhs.has_paRamp())
+      {
+        set_paRamp(rhs.get_paRamp());
+      }
+      else
+      {
+        clear_paRamp();
+      }
+      
+      if(rhs.has_outputPower())
+      {
+        set_outputPower(rhs.get_outputPower());
+      }
+      else
+      {
+        clear_outputPower();
       }
       
       return *this;
@@ -1343,6 +1417,62 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
     inline const uint32_t& get_repeatDelay() const { return repeatDelay_.get(); }
     inline uint32_t repeatDelay() const { return repeatDelay_.get(); }
 
+    static constexpr char const* PARAMP_NAME = "paRamp";
+    inline bool has_paRamp() const
+    {
+      return 0 != (presence::mask(presence::fields::PARAMP) & presence_[presence::index(presence::fields::PARAMP)]);
+    }
+    inline void clear_paRamp()
+    {
+      presence_[presence::index(presence::fields::PARAMP)] &= ~(presence::mask(presence::fields::PARAMP));
+      paRamp_.clear();
+    }
+    inline void set_paRamp(const uint32_t& value)
+    {
+      presence_[presence::index(presence::fields::PARAMP)] |= presence::mask(presence::fields::PARAMP);
+      paRamp_ = value;
+    }
+    inline void set_paRamp(const uint32_t&& value)
+    {
+      presence_[presence::index(presence::fields::PARAMP)] |= presence::mask(presence::fields::PARAMP);
+      paRamp_ = value;
+    }
+    inline uint32_t& mutable_paRamp()
+    {
+      presence_[presence::index(presence::fields::PARAMP)] |= presence::mask(presence::fields::PARAMP);
+      return paRamp_.get();
+    }
+    inline const uint32_t& get_paRamp() const { return paRamp_.get(); }
+    inline uint32_t paRamp() const { return paRamp_.get(); }
+
+    static constexpr char const* OUTPUTPOWER_NAME = "outputPower";
+    inline bool has_outputPower() const
+    {
+      return 0 != (presence::mask(presence::fields::OUTPUTPOWER) & presence_[presence::index(presence::fields::OUTPUTPOWER)]);
+    }
+    inline void clear_outputPower()
+    {
+      presence_[presence::index(presence::fields::OUTPUTPOWER)] &= ~(presence::mask(presence::fields::OUTPUTPOWER));
+      outputPower_.clear();
+    }
+    inline void set_outputPower(const int32_t& value)
+    {
+      presence_[presence::index(presence::fields::OUTPUTPOWER)] |= presence::mask(presence::fields::OUTPUTPOWER);
+      outputPower_ = value;
+    }
+    inline void set_outputPower(const int32_t&& value)
+    {
+      presence_[presence::index(presence::fields::OUTPUTPOWER)] |= presence::mask(presence::fields::OUTPUTPOWER);
+      outputPower_ = value;
+    }
+    inline int32_t& mutable_outputPower()
+    {
+      presence_[presence::index(presence::fields::OUTPUTPOWER)] |= presence::mask(presence::fields::OUTPUTPOWER);
+      return outputPower_.get();
+    }
+    inline const int32_t& get_outputPower() const { return outputPower_.get(); }
+    inline int32_t outputPower() const { return outputPower_.get(); }
+
 
     ::EmbeddedProto::Error serialize(::EmbeddedProto::WriteBufferInterface& buffer) const override
     {
@@ -1381,6 +1511,16 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       if(has_repeatDelay() && (::EmbeddedProto::Error::NO_ERRORS == return_value))
       {
         return_value = repeatDelay_.serialize_with_id(static_cast<uint32_t>(FieldNumber::REPEATDELAY), buffer, true);
+      }
+
+      if(has_paRamp() && (::EmbeddedProto::Error::NO_ERRORS == return_value))
+      {
+        return_value = paRamp_.serialize_with_id(static_cast<uint32_t>(FieldNumber::PARAMP), buffer, true);
+      }
+
+      if(has_outputPower() && (::EmbeddedProto::Error::NO_ERRORS == return_value))
+      {
+        return_value = outputPower_.serialize_with_id(static_cast<uint32_t>(FieldNumber::OUTPUTPOWER), buffer, true);
       }
 
       return return_value;
@@ -1430,6 +1570,16 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
             return_value = repeatDelay_.deserialize_check_type(buffer, wire_type);
             break;
 
+          case FieldNumber::PARAMP:
+            presence_[presence::index(presence::fields::PARAMP)] |= presence::mask(presence::fields::PARAMP);
+            return_value = paRamp_.deserialize_check_type(buffer, wire_type);
+            break;
+
+          case FieldNumber::OUTPUTPOWER:
+            presence_[presence::index(presence::fields::OUTPUTPOWER)] |= presence::mask(presence::fields::OUTPUTPOWER);
+            return_value = outputPower_.deserialize_check_type(buffer, wire_type);
+            break;
+
           case FieldNumber::NOT_SET:
             return_value = ::EmbeddedProto::Error::INVALID_FIELD_ID;
             break;
@@ -1466,6 +1616,8 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       clear_data();
       clear_repeat();
       clear_repeatDelay();
+      clear_paRamp();
+      clear_outputPower();
 
     }
 
@@ -1494,6 +1646,12 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
           break;
         case FieldNumber::REPEATDELAY:
           name = REPEATDELAY_NAME;
+          break;
+        case FieldNumber::PARAMP:
+          name = PARAMP_NAME;
+          break;
+        case FieldNumber::OUTPUTPOWER:
+          name = OUTPUTPOWER_NAME;
           break;
         default:
           name = "Invalid FieldNumber";
@@ -1562,6 +1720,8 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       left_chars = data_.to_string(left_chars, indent_level + 2, DATA_NAME, false);
       left_chars = repeat_.to_string(left_chars, indent_level + 2, REPEAT_NAME, false);
       left_chars = repeatDelay_.to_string(left_chars, indent_level + 2, REPEATDELAY_NAME, false);
+      left_chars = paRamp_.to_string(left_chars, indent_level + 2, PARAMP_NAME, false);
+      left_chars = outputPower_.to_string(left_chars, indent_level + 2, OUTPUTPOWER_NAME, false);
   
       if( 0 == indent_level) 
       {
@@ -1594,11 +1754,13 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
         {
           DEVIATION,
           REPEAT,
-          REPEATDELAY
+          REPEATDELAY,
+          PARAMP,
+          OUTPUTPOWER
         };
 
         // The number of fields for which presence has to be tracked.
-        static constexpr uint32_t N_FIELDS = 3;
+        static constexpr uint32_t N_FIELDS = 5;
 
         // Which type are we using to track presence.
         using TYPE = uint32_t;
@@ -1629,6 +1791,8 @@ class SendRFRequest final: public ::EmbeddedProto::MessageInterface
       ::EmbeddedProto::FieldBytes<255> data_;
       EmbeddedProto::uint32 repeat_ = 0U;
       EmbeddedProto::uint32 repeatDelay_ = 0U;
+      EmbeddedProto::uint32 paRamp_ = 0U;
+      EmbeddedProto::int32 outputPower_ = 0;
 
 };
 

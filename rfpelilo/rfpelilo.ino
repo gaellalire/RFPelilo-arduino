@@ -2,6 +2,7 @@
 // #define CC1101_RADIO 1
 // #define BLE_ACTIVATED 1
 // #define RF69_HIGH_POWER 1
+#define RADIOLIB_LOW_LEVEL 1
 #if not defined(LED_BUILTIN)
 #define LED_BUILTIN 32
 #endif
@@ -459,6 +460,17 @@ void sendRF(rfpelilo::SendRFRequest sendRFRequest) {
       radio.setOOK(true);
       break;
   }
+  if (sendRFRequest.has_paRamp()) {
+    radio.getMod()->SPIwriteRegister(RADIOLIB_RF69_REG_PA_RAMP, RADIOLIB_RF69_PA_RAMP_10_US);
+  }
+  if (sendRFRequest.has_outputPower()) {
+#if defined(RF69_HIGH_POWER) || defined(ARDUINO_ADAFRUIT_FEATHER_RP2040_RFM)
+    radio.setOutputPower(sendRFRequest.get_outputPower(), true);
+#else
+    radio.setOutputPower(sendRFRequest.get_outputPower(), false);
+#endif
+  }
+
   messageLength = sendRFRequest.get_data().get_length();
   if (messageLength > MAX_PACKET_LENGTH) {
     if (radio.fixedPacketLengthMode(0) != RADIOLIB_ERR_NONE) {
@@ -610,6 +622,32 @@ unsigned char mes2[] = {
   0x04, 0xC6, 0x71, 0x07, 0xF0
 };
 
+unsigned char mes3[] = {
+0xFC,0x92,0x5B,0x6C,0xB2,0x59,0x2C,0xB6,0xC9,0x2C,0x92,0x59,0x24,0x92,
+0x49,0x2D,0x96,0xDB,0x6D,0x96,0xC0
+};
+
+void sendMain3() {
+   Serial.println("main3");
+  int m = 0;
+  rfpelilo::SendRFRequest sendRFRequest;
+  ::EmbeddedProto::FieldBytes<255> data;
+  data.set(mes3, sizeof(mes3));
+  // sendRFRequest.set_modulation(mod % 2);
+  sendRFRequest.set_modulation(1);
+  sendRFRequest.set_data(data);
+
+  sendRFRequest.set_frequency(433.92); // scoreboard
+  // sendRFRequest.set_frequency(868.89325);  // console
+  sendRFRequest.set_dataRate(2.3419204);
+  sendRFRequest.set_repeat(5);
+  sendRFRequest.set_repeatDelay(150);
+  digitalWrite(LED_BUILTIN, HIGH);
+  sendRF(sendRFRequest);
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
+
 void sendMain2() {
    Serial.println("main2");
   int m = 0;
@@ -713,16 +751,18 @@ void loop() {
     while (!Serial) ;
       Serial.println("firstCommand");
 
+/*
        receiveMain();
       Serial.println("receiveMain returned " + String(receiving));
       clearReceiving();  // clear previous receiving call
     sendMain2();
       Serial.println("sendMain2 returned " + String(receiving));
     //   sendMain();
+    */
     firstCommand = false;
   }
 
-  int last;
+  uint32_t last;
   read_buffer_.clear();
 
   while (!Serial.available()) {
@@ -745,9 +785,9 @@ void loop() {
         while (Serial.available()) { Serial.read(); }
         goto input_error;
       }
-      last = millis();
     }
     byte = Serial.read();
+    last = millis();
     read_buffer_.push(byte);
     if (EmbeddedProto::Error::NO_ERRORS != ::EmbeddedProto::WireFormatter::DeserializeVarint(read_buffer_, messageSize)) {
       // error : clear input
@@ -766,10 +806,10 @@ void loop() {
           while (Serial.available()) { Serial.read(); }
           goto input_error;
         }
-        last = millis();
       }
 
       byte = Serial.read();
+      last = millis();
 
       read_buffer_.push(byte);
 

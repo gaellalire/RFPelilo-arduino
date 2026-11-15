@@ -20,6 +20,8 @@ message SendRFRequest {
     bytes data = 5 [(EmbeddedProto.options).maxLength = 255];
     optional uint32 repeat = 6;
     optional uint32 repeatDelay = 7;
+    optional uint32 paRamp = 8;
+    optional int32 outputPower = 9;
 }
 
 message ReceiveRFRequest {
